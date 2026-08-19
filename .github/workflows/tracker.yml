@@ -2,7 +2,7 @@ name: Tracker Auto Sync
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '* * * * *' # شغّل السكربت كل دقيقة
   workflow_dispatch:
 
 jobs:
