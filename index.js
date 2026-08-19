@@ -1,9 +1,6 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const puppeteerCore = require('puppeteer-core');
-
-// ربط المحرك الخفيف
-puppeteer.use(StealthPlugin());
+const { createClient } = require('@supabase/supabase-js'); // استدعاء المكتبة المطلوب
 
 puppeteer.use(StealthPlugin());
 
@@ -34,7 +31,6 @@ async function checkAndSyncOrders() {
 
     console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
 
-    // تشغيل المتصفح باستخدام المسار المباشر المخصص لسيرفرات Linux
     const browser = await puppeteer.launch({
       executablePath: '/usr/bin/google-chrome',
       headless: "new",
@@ -61,17 +57,12 @@ async function checkAndSyncOrders() {
         await page.setViewport({ width: 1280, height: 800 });
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
         
-        // الانتقال للرابط وانتظار التحميل
         await page.goto(trackingUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-        // انتظار 8 ثواني لتأكيد تحميل عناصر الصفحة والجافاسكربت
         await new Promise(r => setTimeout(r, 8000));
 
-        // قراءة النسبة
         const progress = await page.evaluate(() => {
           const bodyText = document.body ? document.body.innerText : "";
           
-          // محاولة 1: البحث عن نمط النسبة المئوية %
           const matches = bodyText.match(/(\d{1,3})\s*%/g);
           if (matches && matches.length > 0) {
             for (let m of matches) {
@@ -80,7 +71,6 @@ async function checkAndSyncOrders() {
             }
           }
 
-          // محاولة 2: البحث المباشر داخل العناصر
           const elements = document.querySelectorAll('span, div, p, h1, h2, h3, strong');
           for (let el of elements) {
             if (el.children.length === 0 && el.innerText) {
