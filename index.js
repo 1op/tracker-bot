@@ -1,5 +1,5 @@
-const { createClient } = require('@supabase/supabase-js');
-const puppeteer = require('puppeteer');
+import { createClient } from '@supabase/supabase-js';
+import puppeteer from 'puppeteer';
 
 // 1. إعداد الاتصال بـ Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
