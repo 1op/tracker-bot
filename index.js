@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import puppeteer from 'puppeteer-core';
 import ws from 'ws';
 
-// 1. إعداد الاتصال بـ Supabase وتمرير مكتبة ws لتفادي خطأ الـ WebSocket
+// 1. إعداد الاتصال بـ Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -15,10 +15,10 @@ async function syncTrackerData() {
   console.log(`[${new Date().toISOString()}] 🔄 بدء فحص الطلبات النشطة...`);
 
   try {
-    // 2. جلب الطلبات
+    // 2. جلب الطلبات بـ order_id
     const { data: orders, error } = await supabase
       .from('Tire_One')
-      .select('id, original_link, progress')
+      .select('order_id, original_link, progress')
       .eq('status', 'PROCESSING')
       .not('original_link', 'is', null);
 
@@ -31,7 +31,7 @@ async function syncTrackerData() {
 
     console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
 
-    // 3. تشغيل Google Chrome
+    // 3. تشغيل المتصفح
     const browser = await puppeteer.launch({
       executablePath: '/usr/bin/google-chrome',
       headless: 'new',
@@ -43,7 +43,7 @@ async function syncTrackerData() {
 
     for (const order of orders) {
       try {
-        console.log(`🔍 جاري فحص الطلب #${order.id} عبر الرابط: ${order.original_link}`);
+        console.log(`🔍 جاري فحص الطلب #${order.order_id} عبر الرابط: ${order.original_link}`);
         
         await page.goto(order.original_link, { waitUntil: 'networkidle2', timeout: 30000 });
 
@@ -69,12 +69,12 @@ async function syncTrackerData() {
 
         // 5. جدار الحماية ضد التصفير المفاجئ 🛡️
         if (extractedProgress === null) {
-          console.log(`⚠️ تعذر استخراج النسبة للطلب #${order.id}. تم إلغاء التحديث للحفاظ على النسبة الحالية.`);
+          console.log(`⚠️ تعذر استخراج النسبة للطلب #${order.order_id}. تم إلغاء التحديث للحفاظ على النسبة الحالية.`);
           continue;
         }
 
         if (extractedProgress === 0 && currentProgressInDb > 0) {
-          console.log(`🛡️ جدار الحماية: تم إلغاء التصفير للطلب #${order.id} لأن النسبة المقروءة (0%) تتعارض مع النسبة المسجلة سابقاً (${currentProgressInDb}%).`);
+          console.log(`🛡️ جدار الحماية: تم إلغاء التصفير للطلب #${order.order_id} لأن النسبة المقروءة (0%) تتعارض مع النسبة المسجلة سابقاً (${currentProgressInDb}%).`);
           continue;
         }
 
@@ -84,17 +84,17 @@ async function syncTrackerData() {
           const { error: updateError } = await supabase
             .from('Tire_One')
             .update({ progress: extractedProgress })
-            .eq('id', order.id);
+            .eq('order_id', order.order_id);
 
           if (updateError) {
-            console.error(`❌ خطأ أثناء تحديث الطلب #${order.id}:`, updateError.message);
+            console.error(`❌ خطأ أثناء تحديث الطلب #${order.order_id}:`, updateError.message);
           } else {
-            console.log(`✅ تم تحديث الطلب #${order.id} بنجاح إلى ${extractedProgress}%`);
+            console.log(`✅ تم تحديث الطلب #${order.order_id} بنجاح إلى ${extractedProgress}%`);
           }
         }
 
       } catch (orderError) {
-        console.error(`❌ حدث خطأ أثناء معالجة الطلب #${order.id}:`, orderError.message);
+        console.error(`❌ حدث خطأ أثناء معالجة الطلب #${order.order_id}:`, orderError.message);
       }
     }
 
