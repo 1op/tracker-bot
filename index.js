@@ -12,12 +12,12 @@ async function checkAndSyncOrders() {
   console.log(`[${new Date().toISOString()}] 🔄 بدء فحص الطلبات النشطة...`);
 
   try {
-    // جلب الأوردرات اللي حالتها PROCESSING ولديها رابط تتبع
+    // جلب الطلبات قيد المعالجة والتي تحتوي على رابط في orginal_link
     const { data: orders, error } = await supabase
       .from('Tire_One')
       .select('*')
       .eq('status', 'PROCESSING')
-      .not('tracker_url', 'is', null);
+      .not('orginal_link', 'is', null);
 
     if (error) {
       console.error("❌ خطأ Supabase:", error);
@@ -35,7 +35,7 @@ async function checkAndSyncOrders() {
     });
 
     for (const order of orders) {
-      const trackingUrl = order.tracker_url;
+      const trackingUrl = order.orginal_link; // السحب المباشر من خانة orginal_link
       if (!trackingUrl) continue;
 
       try {
