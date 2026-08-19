@@ -1,9 +1,9 @@
 name: Tracker Auto Sync
 
 on:
-  schedule:
-    - cron: '* * * * *' # شغّل السكربت كل دقيقة
   workflow_dispatch:
+  repository_dispatch:
+    types: [run-sync]
 
 jobs:
   sync:
@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Install Google Chrome
         run: |
@@ -27,4 +27,7 @@ jobs:
         run: npm install
 
       - name: Run Tracker Sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: node index.js
