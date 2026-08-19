@@ -1,15 +1,11 @@
 {
-  "name": "tracker-sync-service",
+  "name": "tracker-bot",
   "version": "1.0.0",
-  "description": "Auto sync order progress to Supabase",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "puppeteer-core": "^21.11.0",
     "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "puppeteer": "^21.5.0"
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
   }
 }
