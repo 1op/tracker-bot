@@ -1,12 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 import puppeteer from 'puppeteer-core';
+import ws from 'ws';
 
-// 1. إعداد الاتصال بـ Supabase مع إيقاف الـ Realtime لتفادي خطأ WebSocket
+// 1. إعداد الاتصال بـ Supabase وتمرير مكتبة ws لتفادي خطأ الـ WebSocket
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false },
-  realtime: { global: false }
+  realtime: { transport: ws }
 });
 
 async function syncTrackerData() {
@@ -29,7 +31,7 @@ async function syncTrackerData() {
 
     console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
 
-    // 3. تشغيل المتصفح
+    // 3. تشغيل Google Chrome
     const browser = await puppeteer.launch({
       executablePath: '/usr/bin/google-chrome',
       headless: 'new',
