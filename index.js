@@ -1,10 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import puppeteer from 'puppeteer-core';
 
-// 1. إعداد الاتصال بـ Supabase
+// 1. إعداد الاتصال بـ Supabase مع إيقاف الـ Realtime لتفادي خطأ WebSocket
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false },
+  realtime: { global: false }
+});
 
 async function syncTrackerData() {
   console.log(`[${new Date().toISOString()}] 🔄 بدء فحص الطلبات النشطة...`);
@@ -26,7 +29,7 @@ async function syncTrackerData() {
 
     console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
 
-    // 3. تشغيل Google Chrome المجهّز في بيئة GitHub مباشرة
+    // 3. تشغيل المتصفح
     const browser = await puppeteer.launch({
       executablePath: '/usr/bin/google-chrome',
       headless: 'new',
