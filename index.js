@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 
 // 1. إعداد الاتصال بـ Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -10,7 +10,7 @@ async function syncTrackerData() {
   console.log(`[${new Date().toISOString()}] 🔄 بدء فحص الطلبات النشطة...`);
 
   try {
-    // 2. جلب الطلبات التي بحالة PROCESSING ولديها رابط
+    // 2. جلب الطلبات
     const { data: orders, error } = await supabase
       .from('Tire_One')
       .select('id, original_link, progress')
@@ -26,8 +26,9 @@ async function syncTrackerData() {
 
     console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
 
-    // 3. تشغيل المتصفح (Puppeteer)
+    // 3. تشغيل Google Chrome المجهّز في بيئة GitHub مباشرة
     const browser = await puppeteer.launch({
+      executablePath: '/usr/bin/google-chrome',
       headless: 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
@@ -41,7 +42,7 @@ async function syncTrackerData() {
         
         await page.goto(order.original_link, { waitUntil: 'networkidle2', timeout: 30000 });
 
-        // 4. البحث عن النسبة المئوية الذكية
+        // 4. استخراج النسبة الذكي
         const extractedProgress = await page.evaluate(() => {
           const bodyText = document.body.innerText;
           const matches = bodyText.match(/(\d+)\s*%/g);
@@ -61,7 +62,7 @@ async function syncTrackerData() {
 
         console.log(`📊 النسبة المقروءة: ${extractedProgress !== null ? extractedProgress + '%' : 'غير متوفرة'} | النسبة الحالية بالداتابيز: ${currentProgressInDb}%`);
 
-        // 5. جدار الحماية ضد التصفير (Daily Limit Guard)
+        // 5. جدار الحماية ضد التصفير المفاجئ 🛡️
         if (extractedProgress === null) {
           console.log(`⚠️ تعذر استخراج النسبة للطلب #${order.id}. تم إلغاء التحديث للحفاظ على النسبة الحالية.`);
           continue;
@@ -72,7 +73,6 @@ async function syncTrackerData() {
           continue;
         }
 
-        // تحديث النسبة فقط إذا اختلفت
         if (extractedProgress === currentProgressInDb) {
           console.log(`ℹ️ لا يوجد تغيير، النسبة الحالية (${extractedProgress}%) مطابقة مع Supabase.`);
         } else {
