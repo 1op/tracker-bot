@@ -1,14 +1,13 @@
 name: Tracker Auto Sync
 
-# 🛡️ إلغاء أي تشغيل قديم معلق فور تشغيل واحد جديد لمنع التراكم وتوفير الموارد
 concurrency:
   group: sync-tracker-group
   cancel-in-progress: true
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # بيشتغل تلقائياً كل 5 دقائق (تقدر تغيرها)
-  workflow_dispatch: # بيسمحلك تشغله يدوي في أي وقت
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -24,9 +23,9 @@ jobs:
           node-version: '20'
 
       - name: Install Google Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
 
       - name: Install Dependencies
         run: npm install
