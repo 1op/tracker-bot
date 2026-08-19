@@ -1,6 +1,6 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const { createClient } = require('@supabase/supabase-js'); // استدعاء المكتبة المطلوب
+const { createClient } = require('@supabase/supabase-js');
 
 puppeteer.use(StealthPlugin());
 
@@ -12,12 +12,12 @@ async function checkAndSyncOrders() {
   console.log(`[${new Date().toISOString()}] 🔄 بدء فحص الطلبات النشطة...`);
 
   try {
-    // جلب الطلبات قيد المعالجة والتي تحتوي على رابط في orginal_link
+    // جلب الطلبات قيد المعالجة والتي تحتوي على رابط في original_link
     const { data: orders, error } = await supabase
       .from('Tire_One')
       .select('*')
       .eq('status', 'PROCESSING')
-      .not('orginal_link', 'is', null);
+      .not('original_link', 'is', null);
 
     if (error) {
       console.error("❌ خطأ Supabase:", error);
@@ -44,7 +44,7 @@ async function checkAndSyncOrders() {
     });
 
     for (const order of orders) {
-      const trackingUrl = order.orginal_link ? order.orginal_link.trim() : "";
+      const trackingUrl = order.original_link ? order.original_link.trim() : "";
       if (!trackingUrl || !trackingUrl.startsWith("http")) {
         console.warn(`⚠️ رابط غير صالح للطلب #${order.order_id}: "${trackingUrl}"`);
         continue;
