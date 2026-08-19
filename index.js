@@ -1,6 +1,9 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const { createClient } = require('@supabase/supabase-js');
+const puppeteerCore = require('puppeteer-core');
+
+// ربط المحرك الخفيف
+puppeteer.use(StealthPlugin());
 
 puppeteer.use(StealthPlugin());
 
