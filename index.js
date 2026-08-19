@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import puppeteer from 'puppeteer';
+const { createClient } = require('@supabase/supabase-js');
+const puppeteer = require('puppeteer');
 
 // 1. إعداد الاتصال بـ Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -43,21 +43,16 @@ async function syncTrackerData() {
 
         // 4. البحث عن النسبة المئوية الذكية
         const extractedProgress = await page.evaluate(() => {
-          // جلب كل النصوص داخل الصفحة
           const bodyText = document.body.innerText;
-          
-          // البحث عن جميع النسب المئوية في الصفحة
           const matches = bodyText.match(/(\d+)\s*%/g);
           if (!matches) return null;
 
-          // تحويل النسب إلى أرقام
           const numbers = matches
             .map(m => parseInt(m.replace('%', '').trim(), 10))
             .filter(n => !isNaN(n));
 
           if (numbers.length === 0) return null;
 
-          // اختيار أعلى نسبة منطقية موجودة في الصفحة وتجاهل الـ 0 إذا وُجدت أرقام أخرى
           const nonZero = numbers.filter(n => n > 0);
           return nonZero.length > 0 ? Math.max(...nonZero) : numbers[0];
         });
@@ -66,8 +61,7 @@ async function syncTrackerData() {
 
         console.log(`📊 النسبة المقروءة: ${extractedProgress !== null ? extractedProgress + '%' : 'غير متوفرة'} | النسبة الحالية بالداتابيز: ${currentProgressInDb}%`);
 
-        // 5. جدار الحماية ضد التصفير المفاجئ (Daily Limit Guard)
-        // إذا كانت النسبة المقروءة 0 (أو null) وكان الطلب يمتلك نسبة سابقة أكبر من 0، نمنع التحديث تماماً
+        // 5. جدار الحماية ضد التصفير (Daily Limit Guard)
         if (extractedProgress === null) {
           console.log(`⚠️ تعذر استخراج النسبة للطلب #${order.id}. تم إلغاء التحديث للحفاظ على النسبة الحالية.`);
           continue;
