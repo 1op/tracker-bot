@@ -29,24 +29,46 @@ async function checkAndSyncOrders() {
       return;
     }
 
+    console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
+
+    // تشغيل المتصفح باستخدام المسار المباشر المخصص لسيرفرات Linux
     const browser = await puppeteer.launch({
+      executablePath: '/usr/bin/google-chrome',
       headless: "new",
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-blink-features=AutomationControlled'
+      ]
     });
 
     for (const order of orders) {
-      const trackingUrl = order.orginal_link; // السحب المباشر من خانة orginal_link
-      if (!trackingUrl) continue;
+      const trackingUrl = order.orginal_link ? order.orginal_link.trim() : "";
+      if (!trackingUrl || !trackingUrl.startsWith("http")) {
+        console.warn(`⚠️ رابط غير صالح للطلب #${order.order_id}: "${trackingUrl}"`);
+        continue;
+      }
+
+      console.log(`🔍 جاري فحص الطلب #${order.order_id} عبر الرابط: ${trackingUrl}`);
 
       try {
         const page = await browser.newPage();
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-        await page.goto(trackingUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+        await page.setViewport({ width: 1280, height: 800 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+        
+        // الانتقال للرابط وانتظار التحميل
+        await page.goto(trackingUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-        await new Promise(r => setTimeout(r, 4000));
+        // انتظار 8 ثواني لتأكيد تحميل عناصر الصفحة والجافاسكربت
+        await new Promise(r => setTimeout(r, 8000));
 
+        // قراءة النسبة
         const progress = await page.evaluate(() => {
           const bodyText = document.body ? document.body.innerText : "";
+          
+          // محاولة 1: البحث عن نمط النسبة المئوية %
           const matches = bodyText.match(/(\d{1,3})\s*%/g);
           if (matches && matches.length > 0) {
             for (let m of matches) {
@@ -54,29 +76,50 @@ async function checkAndSyncOrders() {
               if (!isNaN(val) && val >= 0 && val <= 100) return val;
             }
           }
+
+          // محاولة 2: البحث المباشر داخل العناصر
+          const elements = document.querySelectorAll('span, div, p, h1, h2, h3, strong');
+          for (let el of elements) {
+            if (el.children.length === 0 && el.innerText) {
+              const txt = el.innerText.trim();
+              if (txt.includes('%')) {
+                const num = parseInt(txt.replace(/[^0-9]/g, ''));
+                if (!isNaN(num) && num >= 0 && num <= 100) return num;
+              }
+            }
+          }
+
           return null;
         });
+
+        console.log(`📊 النسبة المقروءة للطلب #${order.order_id}: ${progress !== null ? progress + '%' : 'لم يتم العثور على نسبة'}`);
 
         if (progress !== null && progress !== order.progress) {
           const newStatus = progress >= 100 ? "COMPLETED" : "PROCESSING";
           
-          await supabase
+          const { error: updateErr } = await supabase
             .from('Tire_One')
             .update({ progress: progress, status: newStatus })
             .eq('order_id', order.order_id);
 
-          console.log(`✅ تم تحديث الطلب #${order.order_id} إلى ${progress}%`);
+          if (updateErr) {
+            console.error(`❌ فشل التحديث في Supabase للطلب #${order.order_id}:`, updateErr.message);
+          } else {
+            console.log(`✅ تم تحديث الطلب #${order.order_id} بنجاح إلى ${progress}%`);
+          }
+        } else if (progress === order.progress) {
+          console.log(`ℹ️ النسبة الحالية (${progress}%) متطابقة مع Supabase، لا يوجد تغيير.`);
         }
 
         await page.close();
       } catch (err) {
-        console.error(`❌ خطأ في الطلب #${order.order_id}:`, err.message);
+        console.error(`❌ خطأ أثناء معالجة الطلب #${order.order_id}:`, err.message);
       }
     }
 
     await browser.close();
   } catch (err) {
-    console.error("❌ خطأ عام:", err);
+    console.error("❌ خطأ رئيسي:", err);
   }
 }
 
