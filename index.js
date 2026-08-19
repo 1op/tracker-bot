@@ -1,119 +1,87 @@
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js';
+import puppeteer from 'puppeteer';
 
-puppeteer.use(StealthPlugin());
+// 1. إعداد الاتصال بـ Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-const SUPABASE_URL = "https://eplnmlsegvwqcyneebbf.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_j34IvrzngwK00_O1Nz8vvw_92CJLGSh";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-async function checkAndSyncOrders() {
+async function syncTrackerData() {
   console.log(`[${new Date().toISOString()}] 🔄 بدء فحص الطلبات النشطة...`);
 
   try {
-    // جلب الطلبات قيد المعالجة والتي تحتوي على رابط في original_link
+    // 2. جلب الطلبات التي بحالة PROCESSING ولديها رابط
     const { data: orders, error } = await supabase
       .from('Tire_One')
-      .select('*')
+      .select('id, original_link, progress')
       .eq('status', 'PROCESSING')
       .not('original_link', 'is', null);
 
-    if (error) {
-      console.error("❌ خطأ Supabase:", error);
-      return;
-    }
+    if (error) throw error;
 
     if (!orders || orders.length === 0) {
-      console.log("ℹ️ لا توجد طلبات جديدة بحاجة للمزامنة حالياً.");
+      console.log('ℹ️ لا توجد طلبات نشطة حالياً بحاجة للمزامنة.');
       return;
     }
 
     console.log(`📌 تم العثور على ${orders.length} طلب/طلبات للمزامنة.`);
 
+    // 3. تشغيل المتصفح (Puppeteer)
     const browser = await puppeteer.launch({
-      executablePath: '/usr/bin/google-chrome',
-      headless: "new",
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-blink-features=AutomationControlled'
-      ]
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
+    const page = await browser.newPage();
+    // ضبط User-Agent لتفادي الحظر
+    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
     for (const order of orders) {
-      const trackingUrl = order.original_link ? order.original_link.trim() : "";
-      if (!trackingUrl || !trackingUrl.startsWith("http")) {
-        console.warn(`⚠️ رابط غير صالح للطلب #${order.order_id}: "${trackingUrl}"`);
-        continue;
-      }
-
-      console.log(`🔍 جاري فحص الطلب #${order.order_id} عبر الرابط: ${trackingUrl}`);
-
       try {
-        const page = await browser.newPage();
-        await page.setViewport({ width: 1280, height: 800 });
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+        console.log(`🔍 جاري فحص الطلب #${order.id} عبر الرابط: ${order.original_link}`);
         
-        await page.goto(trackingUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await new Promise(r => setTimeout(r, 8000));
+        await page.goto(order.original_link, { waitUntil: 'networkidle2', timeout: 30000 });
 
-        const progress = await page.evaluate(() => {
-          const bodyText = document.body ? document.body.innerText : "";
-          
-          const matches = bodyText.match(/(\d{1,3})\s*%/g);
-          if (matches && matches.length > 0) {
-            for (let m of matches) {
-              const val = parseInt(m.replace('%', '').trim());
-              if (!isNaN(val) && val >= 0 && val <= 100) return val;
-            }
-          }
-
-          const elements = document.querySelectorAll('span, div, p, h1, h2, h3, strong');
-          for (let el of elements) {
-            if (el.children.length === 0 && el.innerText) {
-              const txt = el.innerText.trim();
-              if (txt.includes('%')) {
-                const num = parseInt(txt.replace(/[^0-9]/g, ''));
-                if (!isNaN(num) && num >= 0 && num <= 100) return num;
-              }
-            }
-          }
-
-          return null;
+        // 4. استخراج النسبة المئوية مرناً
+        const extractedProgress = await page.evaluate(() => {
+          const text = document.body.innerText;
+          const match = text.match(/(\d+)\s*%/);
+          return match ? parseInt(match[1], 10) : null;
         });
 
-        console.log(`📊 النسبة المقروءة للطلب #${order.order_id}: ${progress !== null ? progress + '%' : 'لم يتم العثور على نسبة'}`);
+        console.log(`📊 النسبة المقروءة للطلب #${order.id}: ${extractedProgress !== null ? extractedProgress + '%' : 'غير معروفة'}`);
 
-        if (progress !== null && progress !== order.progress) {
-          const newStatus = progress >= 100 ? "COMPLETED" : "PROCESSING";
-          
-          const { error: updateErr } = await supabase
-            .from('Tire_One')
-            .update({ progress: progress, status: newStatus })
-            .eq('order_id', order.order_id);
-
-          if (updateErr) {
-            console.error(`❌ فشل التحديث في Supabase للطلب #${order.order_id}:`, updateErr.message);
+        // 5. شرط الحماية: لا نحدّث إذا كانت القيمة null أو 0 والموجود سابقاً أكبر من 0
+        if (extractedProgress !== null && extractedProgress > 0) {
+          if (order.progress === extractedProgress) {
+            console.log(`ℹ️ لا يوجد تغيير، النسبة الحالية (${extractedProgress}%) مطابقة مع Supabase.`);
           } else {
-            console.log(`✅ تم تحديث الطلب #${order.order_id} بنجاح إلى ${progress}%`);
+            const { error: updateError } = await supabase
+              .from('Tire_One')
+              .update({ progress: extractedProgress })
+              .eq('id', order.id);
+
+            if (updateError) {
+              console.error(`❌ خطأ أثناء تحديث الطلب #${order.id}:`, updateError.message);
+            } else {
+              console.log(`✅ تم تحديث الطلب #${order.id} بنجاح إلى ${extractedProgress}%`);
+            }
           }
-        } else if (progress === order.progress) {
-          console.log(`ℹ️ النسبة الحالية (${progress}%) متطابقة مع Supabase، لا يوجد تغيير.`);
+        } else {
+          console.log(`⚠️ تم تجاوز تحديث الطلب #${order.id} لحماية البيانات (النسبة المقروءة 0% أو غير متوفرة بسبب صفحة الـ Daily Limit/الصورة).`);
         }
 
-        await page.close();
-      } catch (err) {
-        console.error(`❌ خطأ أثناء معالجة الطلب #${order.order_id}:`, err.message);
+      } catch (orderError) {
+        console.error(`❌ حدث خطأ أثناء معالجة الطلب #${order.id}:`, orderError.message);
       }
     }
 
     await browser.close();
+    console.log('✨ اكتملت عملية المزامنة بنجاح.');
+
   } catch (err) {
-    console.error("❌ خطأ رئيسي:", err);
+    console.error('❌ خطأ عام في Supabase أو السكربت:', err);
   }
 }
 
-checkAndSyncOrders();
+syncTrackerData();
