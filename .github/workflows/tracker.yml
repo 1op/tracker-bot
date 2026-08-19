@@ -5,6 +5,9 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
+env:
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: true
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -18,19 +21,11 @@ jobs:
         with:
           node-version: '18'
 
-      # تسريع التثبيت عن طريق الكاش
-      - name: Cache Node Modules
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Install Chrome
+        run: sudo apt-get update && sudo apt-get install -y google-chrome-stable
 
       - name: Install Dependencies
-        run: |
-          npm install
-          npx puppeteer browsers install chrome
+        run: npm install
 
       - name: Run Tracker Sync
         run: node index.js
