@@ -1,0 +1,26 @@
+name: Tracker Auto Sync
+
+on:
+  schedule:
+    # بيشتغل أوتوماتيك كل 5 دقائق 24/7
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # يخليك تقدر تشغله يدوي في أي وقت
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/node-nodejs@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Tracker Sync
+        run: node index.js
